@@ -1,0 +1,23 @@
+version: 0.2
+
+env:
+  variables:
+    #IMAGE_FILE: "Dockerfile.insecure"
+    IMAGE_FILE: "Dockerfile.secure"
+
+phases:
+  pre_build:
+    commands:
+      # Login to ecr as docker repo
+      - eval $(aws ecr get-login --no-include-email)
+      # Ensure repo exists, if not create it
+      - aws ecr create-repository --repository-name ecr-demo --image-scanning-configuration scanOnPush=true >> /dev/null 2>&1 || echo "repo exists"
+      - export REPO_URL=$(aws ecr describe-repositories --repository-names ecr-demo --output text --query repositories[*].repositoryUri)
+  build:
+    commands:
+      - docker build -t $REPO_URL:$CODEBUILD_RESOLVED_SOURCE_VERSION -f $IMAGE_FILE .
+  post_build:
+    commands:
+      - docker push $REPO_URL:$CODEBUILD_RESOLVED_SOURCE_VERSION
+      - ./check_scans.sh $CODEBUILD_RESOLVED_SOURCE_VERSION
+
